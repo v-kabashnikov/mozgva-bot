@@ -53,18 +53,38 @@ module BotCommand
     end
   end
 
-  #DEMO FUNCTION
+  #REGISTRATION FUNCTION
   #-------------
   #-------------
   #-------------
 
-  class Demo < Base
+  class Registration < Base
     def should_start?
-      text =~ /\A\/demo/
+      text =~ /\A\/game_registration/
     end
 
     def start
-      send_message("Привет. Я бот, но тоже очень люблю играть в мозгву")
+      send_message("Я могу зарегистрировать Вас на игру.")
+      user.set_next_bot_command('BotCommand::Next')
+    end
+
+    def undefined
+    end
+  end
+
+  #NEXT STEP FUNCTION
+  #-------------
+  #-------------
+  #-------------
+
+  class Next < Base
+    def should_start?
+      text =~ /\A\/next/
+    end
+
+    def start
+      send_message("Next step")
+      user.reset_next_bot_command
     end
   end
 

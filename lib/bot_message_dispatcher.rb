@@ -3,7 +3,7 @@ include BotCommand
 
 class BotMessageDispatcher
   attr_reader :message, :user
-  COMMANDS = {demo: 'Demo', help: 'Help', start: 'Start'}
+  COMMANDS = {registration: 'Registration', help: 'Help', start: 'Start'}
 
   def initialize(message, user)
     @message = message
