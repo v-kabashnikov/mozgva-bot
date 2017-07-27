@@ -1,4 +1,5 @@
 class WebhooksController < ApplicationController
+  require 'bot_message_dispatcher'
   skip_before_action :verify_authenticity_token
 
   def callback
