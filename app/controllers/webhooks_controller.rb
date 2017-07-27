@@ -11,7 +11,7 @@ class WebhooksController < ApplicationController
   end
 
   def dispatcher
-    BotMessageDispatcher
+    ::BotMessageDispatcher
   end
 
   def from
