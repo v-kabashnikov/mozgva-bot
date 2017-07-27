@@ -7,14 +7,14 @@ default: &default
 
 development:
   <<: *default
-  database: pazuzu_development
+  database: mozgva_bot_development
 
 
 test:
   <<: *default
-  database: pazuzu_test
+  database: mozgva_bot_test
 
 
 production:
   <<: *default
-  database: pazuzu_production
+  database: mozgva_bot_production

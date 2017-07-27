@@ -1,21 +1,9 @@
-require 'telegram/bot'
-include BotCommand
-require 'bot_message_dispatcher'
-
 class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
 
   def callback
-    # binding.pry
-    # @api = ::Telegram::Bot::Api.new(ENV['token'])
-    # #@api.send_message(chat_id:  params[:message][:chat][:id], text: "Hello")
-    # question = 'London is a capital of which country?'
-    # # See more: https://core.telegram.org/bots/api#replykeyboardmarkup
-    # answers =
-    #   Telegram::Bot::Types::ReplyKeyboardMarkup
-    #   .new(keyboard: [%w(A B), %w(C D)], one_time_keyboard: true)
-    # @api.send_message(chat_id: params[:message][:chat][:id], text: question, reply_markup: answers)
     dispatcher.new(webhook, user).process
+    render body: nil
   end
 
   def webhook
@@ -23,12 +11,11 @@ class WebhooksController < ApplicationController
   end
 
   def dispatcher
-    ::BotMessageDispatcher
+    BotMessageDispatcher
   end
 
   def from
-    message ||= webhook[:edited_message] || webhook[:message]
-    message[:from]
+    webhook[:message][:from]
   end
 
   def user

@@ -6,7 +6,7 @@ require 'rails/all'
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
-module Pazuzu
+module Mozgva
   class Application < Rails::Application
   	config.autoload_paths << Rails.root.join('lib')
     # Settings in config/environments/* take precedence over those specified here.
