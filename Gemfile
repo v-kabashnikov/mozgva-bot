@@ -8,7 +8,7 @@ gem 'pg'
 gem 'puma'
 gem 'pry'
 gem 'telegram-bot-ruby'
-gem "figaro"
+gem 'figaro'
 
 # Use Capistrano for deployment
 # gem 'capistrano-rails', group: :development
