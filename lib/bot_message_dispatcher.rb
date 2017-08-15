@@ -3,7 +3,7 @@ include BotCommand
 
 class BotMessageDispatcher
   attr_reader :message, :user
-  COMMANDS = {registration: 'Registration', help: 'Help', start: 'Start'}
+  COMMANDS = {game_registration: 'GameRegistration', help: 'Help', start: 'Start', schedule: "Schedule", new_team: "NewTeam"}
 
   def initialize(message, user)
     @message = message
@@ -17,7 +17,7 @@ class BotMessageDispatcher
       if bot_command.should_start?
         bot_command.start
       else
-        unknown_command
+        bot_command.undefined
       end
     else
       command = message.dig(:message, :text)
@@ -34,7 +34,7 @@ class BotMessageDispatcher
         end
     end
   end
-  
+
   private
 
   def unknown_command
