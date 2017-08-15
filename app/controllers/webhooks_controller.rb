@@ -16,7 +16,11 @@ class WebhooksController < ApplicationController
   end
 
   def from
-    webhook[:message][:from]
+    begin
+      webhook.dig(:message, :from) || webhook.dig(:edited_message, :from)
+    rescue Exception
+      
+    end
   end
 
   def user
