@@ -10,18 +10,41 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20161026210845) do
+ActiveRecord::Schema.define(version: 20170815051002) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
-  create_table "users", force: :cascade do |t|
-    t.string   "telegram_id"
-    t.string   "first_name"
-    t.string   "last_name"
-    t.jsonb    "bot_command_data", default: {}
-    t.datetime "created_at",                    null: false
-    t.datetime "updated_at",                    null: false
+  create_table "games", force: :cascade do |t|
+    t.integer "selector"
+    t.string "place"
+    t.string "time"
+    t.bigint "registration_data_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["registration_data_id"], name: "index_games_on_registration_data_id"
+  end
+
+  create_table "registration_data", force: :cascade do |t|
+    t.string "date"
+    t.string "team_name"
+    t.string "status"
+    t.integer "member_amount"
+    t.bigint "user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "phone"
+    t.index ["user_id"], name: "index_registration_data_on_user_id"
+  end
+
+  create_table "users", id: :serial, force: :cascade do |t|
+    t.string "telegram_id"
+    t.string "first_name"
+    t.string "last_name"
+    t.jsonb "bot_command_data", default: {}
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "nickname"
   end
 
 end

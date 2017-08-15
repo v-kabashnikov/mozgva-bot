@@ -1,4 +1,5 @@
 class WebhooksController < ApplicationController
+  require 'bot_message_dispatcher'
   skip_before_action :verify_authenticity_token
 
   def callback
@@ -11,11 +12,15 @@ class WebhooksController < ApplicationController
   end
 
   def dispatcher
-    BotMessageDispatcher
+    ::BotMessageDispatcher
   end
 
   def from
-    webhook[:message][:from]
+    begin
+      webhook.dig(:message, :from) || webhook.dig(:edited_message, :from)
+    rescue Exception
+      
+    end
   end
 
   def user

@@ -9,6 +9,7 @@ gem 'puma'
 gem 'pry'
 gem 'telegram-bot-ruby'
 gem "figaro"
+gem 'rest-client', '~> 1.8'
 
 # Use Capistrano for deployment
 # gem 'capistrano-rails', group: :development
@@ -33,3 +34,12 @@ end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw, :jruby]
+
+group :test do
+  gem 'faker'
+  gem 'factory_girl_rails', '~> 4.0'
+  gem 'shoulda-matchers', git: 'https://github.com/thoughtbot/shoulda-matchers.git', branch: 'rails-5'
+  gem 'database_cleaner', '~> 1.5'
+end
+
+ruby "2.4.1"
