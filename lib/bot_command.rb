@@ -111,7 +111,10 @@ module BotCommand
     end
 
     def start
-      send_keyboard("Отменить", "Как называется Ваша команда? Напишите, пожалуйста, название в точь точь как на сайте mozgva.com")
+      keys = []
+      keys << user.team_name if user.team_name.present?
+      keys << "Отменить"
+      send_keyboard(keys, "Как называется Ваша команда? Напишите, пожалуйста, название в точь точь как на сайте mozgva.com или выберите название из Вашего профиля(можно добавить в /settings")
       user.set_next_bot_command('BotCommand::TeamChecker')
     end
 
@@ -128,6 +131,7 @@ module BotCommand
     end
 
     def start
+      user.update_attribute(:team_name, text)
       rd = RegistrationData.new(status: "from matching existing team", team_name: text)
       user.registration_data.destroy if user.registration_data.present?
       user.registration_data = rd
@@ -238,26 +242,35 @@ module BotCommand
         
 
       else
-
-        user.registration_data.update_attribute(:secret, text)
-        response = register_team(user.registration_data)
-        status = response["success"] if response.present?
-        mess = response["message"] if response.present?
-        if status
-          message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s)}"
-          remove_keyboard(message)
-          user.reset_next_bot_command
-          user.registration_data.destroy if user.registration_data.present? 
+        if text == "Ввести новый секретный код"
+          send_keyboard("Отменить", "Введите код")
+          user.set_next_bot_command('BotCommand::SecretSender')
         else
-          if mess == "Вы уже записались на эту игру"
-            remove_keyboard("Вы уже записались на эту игру")
-            user.reset_next_bot_command
+          if text == "Да"
+            user.registration_data.update_attribute(:secret, user.secret)  
           else
-            send_keyboard(["Выслать мне секретный код", "Отменить"], "Неправильный код, введите еще раз")
-            user.set_next_bot_command('BotCommand::SecretSender')
-          end          
+            user.update_attribute(:secret, text)
+            user.registration_data.update_attribute(:secret, text)
+          end
+          
+          response = register_team(user.registration_data)
+          status = response["success"] if response.present?
+          mess = response["message"] if response.present?
+          if status
+            message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s)}\nЧто бы продолжить нажмите /help"
+            remove_keyboard(message)
+            user.reset_next_bot_command
+            user.registration_data.destroy if user.registration_data.present? 
+          else
+            if mess == "Вы уже записались на эту игру"
+              remove_keyboard("Вы уже записались на эту игру\nЧто бы продолжить нажмите /help")
+              user.reset_next_bot_command
+            else
+              send_keyboard(["Выслать мне секретный код", "Отменить"], "Неправильный код, введите еще раз")
+              user.set_next_bot_command('BotCommand::SecretSender')
+            end          
+          end
         end
-        
       end
       
     end
@@ -388,7 +401,12 @@ module BotCommand
       user.registration_data.games.each do |game|
         game.destroy if game.time != text
       end
-      if user.registration_data.team_name.present?
+      if user.team_name.present?
+        user.registration_data.update_attribute(:team_name, user.team_name)
+        question = "Пожалуйста, подтвердите название вашей команды, вы называетесь #{user.team_name}?"
+        send_keyboard(["Да", "Изменить название", "Отменить"], question)
+        user.set_next_bot_command('BotCommand::AreYouSure')
+      elsif user.registration_data.team_name.present?
         question = "Пожалуйста, подтвердите название вашей команды, вы называетесь #{user.registration_data.team_name}?"
         send_keyboard(["Да", "Изменить название", "Отменить"], question)
         user.set_next_bot_command('BotCommand::AreYouSure')
@@ -412,11 +430,13 @@ module BotCommand
 
     def start
       if team_exists? text
+        user.update_attribute(:team_name, text)
         user.registration_data.update_attribute(:team_name, text)
         question = "Такая команда уже существует"
         send_keyboard(["Изменить название", "Перейти к регистрации существующей команды", "Отменить"], question)
         user.set_next_bot_command('BotCommand::AreYouSure')
       else
+        user.update_attribute(:team_name, text)
         user.registration_data.update_attribute(:team_name, text) if user.registration_data.status != "from matching existing team"        
         question = "Пожалуйста, подтвердите название вашей команды, вы называетесь #{user.registration_data.team_name}?"
         send_keyboard(["Да", "Изменить название", "Отменить"], question)
@@ -452,10 +472,16 @@ module BotCommand
         send_keyboard("Отменить", question)
         user.set_next_bot_command('BotCommand::NewTeamName')
       elsif text == "Да"
-        question = "Сколько человек в команде? Максимум 9 чел."
-        keys = %w(1 2 3 4 5 6 7 8 9 Отменить)
-        send_keyboard(keys, question)
-        user.set_next_bot_command('BotCommand::TeamMembers')
+        if team_exists?(user.team_name)
+          question = "Такая команда уже существует"
+          send_keyboard(["Изменить название", "Перейти к регистрации существующей команды", "Отменить"], question)
+          user.set_next_bot_command('BotCommand::AreYouSure')
+        else
+          question = "Сколько человек в команде? Максимум 9 чел."
+          keys = %w(1 2 3 4 5 6 7 8 9 Отменить)
+          send_keyboard(keys, question)
+          user.set_next_bot_command('BotCommand::TeamMembers')
+        end
       elsif text == "Перейти к регистрации существующей команды"
         user.registration_data.update_attribute(:status, "from matching existing team")
         question = "Сколько человек в команде? Максимум 9 чел."
@@ -468,6 +494,16 @@ module BotCommand
     def undefined
       send_message("????")
     end
+
+    def team_exists?(team_name)
+      name = URI.encode(team_name)
+      response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/find?name=#{name}']
+      begin
+        JSON.parse(response)["success"]  
+      rescue Exception
+        false
+      end
+    end
   end
 
   class TeamMembers < Base
@@ -477,10 +513,14 @@ module BotCommand
 
     def start
       user.registration_data.update_attribute(:member_amount, text.to_i)
-
       user.set_next_bot_command('BotCommand::TeamPhone')
-      question = "Введите номер капитана в формате 7xxxxxxxxxx (11 цифр)"
-      send_keyboard("Отменить", question)
+      if user.phone_number.present?
+        question = "Ваш номер телефона #{user.phone_number}"
+        send_keyboard(%w(Да Нет Отменить), question)
+      else
+        question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)\nТакже вы можете указать номер в настройках /settings, чтобы не вводить его каждый раз при регистрации."
+        send_keyboard("Отменить", question)
+      end
 
     end
 
@@ -492,33 +532,55 @@ module BotCommand
 
   class TeamPhone < Base
     def should_start?
-      text =~ /^[7]\d{9,}/
+      text =~ /^[7]\d{8,}/ || %w(Да Нет).include?(text)
     end
 
     def start
-      user.registration_data.update_attribute(:phone, text.to_i)
-      if user.registration_data.status == "from matching existing team"
-        question = "Всегда приятно пообщаться с опытным Мозгвичем. Но мне надо удостовериться что вы действительно участник команды. Назовите секретный код Вашей команды. (У каждой команды на Мозгве есть свой ключ. Это слово (его придумывает капитан) дает право другим игрокам управлять аккаунтом команды. Если вы не знаете Ваш секретный код, спросите его у капитана. Если вы и есть капитан, придумайте секретный код и укажите его на сайте, в личном кабинете, в разделе 'секретный код'."
-        send_keyboard(["Выслать мне секретный код", "Отменить"], question)
-        user.set_next_bot_command('BotCommand::SecretSender')
-      
-      else
-
-        response = register_team(user.registration_data)
-        status = response["success"]
-        message = response["message"]
-        
-        if status
-          message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s)}"
-          remove_keyboard(message)
-          user.reset_next_bot_command
+      case text
+      when /^[7]\d{8,}/, "Да"
+        if text == "Да"
+          user.registration_data.update_attribute(:phone, user.phone_number.to_i)
         else
-          remove_keyboard(message)
-          user.reset_next_bot_command
+          user.update_attribute(:phone_number, text.to_i)
+          user.registration_data.update_attribute(:phone, text.to_i)
         end
+
+        
+        if user.registration_data.status == "from matching existing team"
+          if user.secret.present?
+            question = "Всегда приятно пообщаться с опытным Мозгвичем. Но мне надо удостовериться что вы действительно участник команды. Назовите секретный код Вашей команды. (У каждой команды на Мозгве есть свой ключ. Это слово (его придумывает капитан) дает право другим игрокам управлять аккаунтом команды. Если вы не знаете Ваш секретный код, спросите его у капитана. Если вы и есть капитан, придумайте секретный код и укажите его на сайте, в личном кабинете, в разделе 'секретный код'.\nИспользовать секретный код #{user.secret}?"
+            send_keyboard(["Да", "Ввести новый секретный код", "Отменить"], question)
+            user.set_next_bot_command('BotCommand::SecretSender')
+          else
+            question = "Всегда приятно пообщаться с опытным Мозгвичем. Но мне надо удостовериться что вы действительно участник команды. Назовите секретный код Вашей команды. (У каждой команды на Мозгве есть свой ключ. Это слово (его придумывает капитан) дает право другим игрокам управлять аккаунтом команды. Если вы не знаете Ваш секретный код, спросите его у капитана. Если вы и есть капитан, придумайте секретный код и укажите его на сайте, в личном кабинете, в разделе 'секретный код'."
+            send_keyboard(["Выслать мне секретный код", "Отменить"], question)
+            user.set_next_bot_command('BotCommand::SecretSender')
+          end
+      
+        else
+
+          response = register_team(user.registration_data)
+          status = response["success"]
+          message = response["message"]
+            
+          if status
+            message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s)}\nЧто бы продолжить нажмите /help"
+            remove_keyboard(message)
+            user.reset_next_bot_command
+          else
+            remove_keyboard(message.to_s + "\nЧто бы продолжить нажмите /help")
+            user.reset_next_bot_command
+          end
+        end      
+
+      when "Нет"
+        question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)\nТакже вы можете указать номер в настройках /settings, чтобы не вводить его каждый раз при регистрации."
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::ChangePhoneFromRegistration')
       end
 
     end
+
 
     def undefined
       question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
@@ -542,6 +604,24 @@ module BotCommand
     end
   end
 
+  class ChangePhoneFromRegistration < Base
+    def should_start?
+      text =~ /^[7]\d{8,}/
+    end
+
+    def start
+      user.update_attribute(:phone_number, text)
+      user.set_next_bot_command('BotCommand::TeamPhone')
+      question = "Ваш номер телефона #{user.phone_number}"
+      send_keyboard(%w(Да Нет Отменить), question)
+    end
+
+    def undefined
+      question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
+      send_keyboard("Отменить", question)
+    end
+  end
+
   #START----------------------------------------------------------------------
   #-------------------------------------------------------------------------------------------
   #-------------------------------------------------------------------------------------------
@@ -561,12 +641,7 @@ module BotCommand
     end
   end
 
-<<<<<<< HEAD
-  #USERNAME----------------------------------------------------------------------
-  #-------------------------------------------------------------------------------------------
-  #-------------------------------------------------------------------------------------------
-  #-------------------------------------------------------------------------------------------
-=======
+
   #PERSONAL SETTINGS
   #---------------------------------------------------------------------------------------------
   #----------------------------------------------------------------------------------------------
@@ -637,7 +712,7 @@ module BotCommand
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
@@ -675,7 +750,7 @@ module BotCommand
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
@@ -701,7 +776,7 @@ module BotCommand
     def start
       case text
       when "Да"
-        question = "Введите номер телефона"
+        question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
         send_keyboard("Отменить", question)
         user.set_next_bot_command('BotCommand::AddPhone')
       when "Нет"
@@ -713,13 +788,13 @@ module BotCommand
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
   class AddPhone < Base
     def should_start?
-      text =~ /^[7]\d{9,}/
+      text =~ /^[7]\d{8,}/
     end
 
     def start
@@ -758,7 +833,7 @@ module BotCommand
 
   class ChangeName < Base
     def should_start?
-      ["Да", "Нет"].include?(text)
+       %w(Да Нет).include?(text)
     end
 
     def start
@@ -767,24 +842,26 @@ module BotCommand
         send_keyboard("Отменить", question)
         user.set_next_bot_command('BotCommand::Nickname')
       else
-        user.reset_next_bot_command
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
       end
     end
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
   class Introduce < Base
     def should_start?
-      ["Да", "Нет"].include?(text)
+      %w(Да Нет).include?(text)
     end
 
     def start
       if text == "Да"
-        send_message("Приятно познакомиться!")
+        remove_keyboard("Приятно познакомиться!\nЧто бы продолжить нажмите /help")
         user.reset_next_bot_command
       else
         question = "Как тебя зовут?"
@@ -795,7 +872,7 @@ module BotCommand
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
@@ -822,7 +899,7 @@ module BotCommand
     end
 
     def start
-      send_message("Отменено\nЧто бы продолжить нажмите /help")
+      remove_keyboard("Отменено\nЧто бы продолжить нажмите /help")
       user.reset_next_bot_command
     end
   end
