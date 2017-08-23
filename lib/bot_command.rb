@@ -264,7 +264,7 @@ module BotCommand
       user.registration_data.update_attribute(:member_amount, text.to_i)
 
       user.set_next_bot_command('BotCommand::TeamPhone')
-      question = "Введите номер капитана в формате 79xxxxxxxxx (11 цифр)"
+      question = "Введите номер капитана в формате 7xxxxxxxxxx (11 цифр)"
       send_keyboard("Отменить", question)
 
     end
@@ -280,7 +280,7 @@ module BotCommand
 
   class TeamPhone < Base
     def should_start?
-      text =~ /^[7][9]\d{9}/
+      text =~ /^[7]\d{9,}/
     end
 
     def start
@@ -289,9 +289,9 @@ module BotCommand
       response = register_team(user.registration_data)
       status = response["success"]
       message = response["message"]
-      
+
       if status
-        message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || user.last_name}"
+        message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || user.last_name}\nЧто бы продолжить нажмите /help"
         remove_keyboard(message)
         user.reset_next_bot_command
       else
@@ -302,7 +302,7 @@ module BotCommand
     end
 
     def undefined
-      question = "Введите номер телефона в формате 79xxxxxxxxx (11 цифр)"
+      question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
       send_keyboard("Отменить", question)
     end
 
@@ -365,7 +365,7 @@ module BotCommand
     end
 
     def start
-      question = "Текущее имя: #{user.nickname || (user.first_name.to_s +" "+ user.last_name.to_s) }\nХочешь изменить его?"
+      question = "Текущее имя: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s) }\nХочешь изменить его?"
       send_keyboard(%w(Да Нет Отменить), question)
       user.set_next_bot_command('BotCommand::ChangeName')
     end
@@ -424,7 +424,7 @@ module BotCommand
 
     def start
       user.update_attribute(:nickname, text)
-      remove_keyboard("Спасибо, #{user.nickname}")      
+      remove_keyboard("Спасибо, #{user.nickname}\nЧто бы продолжить нажмите /help")
       user.reset_next_bot_command
     end
   end
@@ -435,7 +435,7 @@ module BotCommand
     end
 
     def start
-      send_message("Отменено")      
+      send_message("Отменено\nЧто бы продолжить нажмите /help")
       user.reset_next_bot_command
     end
   end
