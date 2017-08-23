@@ -10,7 +10,7 @@ module BotCommand
       @message = message
       token = ENV['token']
       @api = ::Telegram::Bot::Api.new(token)
-      @greeting = "Привет, меня зовут Мозгва_бот.\nЯ могу показать тебе актуальное расписание на ближайшие игры.\nИли даже зарегистрировать твою команду.\nВот что я умею:\n/game_registration - Регистриция на игру \n/schedule - Расписание игр\n/change_username - Изменить имя (имя используется в качестве имени капитана команды при регистрации)"
+      @greeting = "Привет, меня зовут Мозгва_бот.\nЯ могу показать тебе актуальное расписание на ближайшие игры.\nИли даже зарегистрировать твою команду.\nВот что я умею:\n/game_registration - Регистриция на игру \n/schedule - Расписание игр\n/settings - Персональные настройки (Имя, название команды, секретный код, номер телефона. Используются при регистрации)"
     end
 
     def should_start?
@@ -358,6 +358,182 @@ module BotCommand
     end
   end
 
+  #PERSONAL SETTINGS
+  #---------------------------------------------------------------------------------------------
+  #----------------------------------------------------------------------------------------------
+  #--------------------------------------------------------------------------------------------------------
+
+
+  class PersonalSettings < Base
+    def should_start?
+      text =~ /\A\/settings/
+    end
+
+    def start
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+  end
+
+  class SettingsRouter < Base
+    def should_start?
+      %w(Имя Секретный\ код Название\ команды Телефон).include?(text)
+    end
+
+    def start
+      case text
+      when "Имя"
+        question = "Текущее имя: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s) }\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangeName')
+      when "Секретный код"
+        question = "Текущий секретный код: #{user.secret}\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangeSecret')
+      when "Название команды"
+        question = "Текущее название команды: #{user.team_name}\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangeTeamName')
+      when "Телефон"
+        question = "Текущий номер: #{user.phone_number}\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangePhone')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только\nИмя, Секретный код, Название команды, Телефон"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+  class ChangeSecret < Base
+    def should_start?
+      %w(Да Нет).include?(text)
+    end
+
+    def start
+      case text
+      when "Да"
+        question = "Введи код"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::AddSecret')
+      when "Нет"
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только Да или Нет"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+  class AddSecret < Base
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      user.update_attribute(:secret, text)
+      remove_keyboard("Секретный код записан: #{user.secret}, #{user.nickname}\n")
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+  end
+
+  class ChangeTeamName < Base
+    def should_start?
+      %w(Да Нет).include?(text)
+    end
+
+    def start
+      case text
+      when "Да"
+        question = "Введите название команды"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::AddTeamName')
+      when "Нет"
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только Да или Нет"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+  class AddTeamName < Base
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      user.update_attribute(:team_name, text)
+      remove_keyboard("Название команды записано: #{user.team_name}, #{user.nickname}")
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+  end
+
+  class ChangePhone < Base
+    def should_start?
+      %w(Да Нет).include?(text)
+    end
+
+    def start
+      case text
+      when "Да"
+        question = "Введите номер телефона"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::AddPhone')
+      when "Нет"
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только Да или Нет"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+  class AddPhone < Base
+    def should_start?
+      text =~ /^[7]\d{9,}/
+    end
+
+    def start
+      user.update_attribute(:phone_number, text)
+      remove_keyboard("Телефон записан: #{user.phone_number}, #{user.nickname}\n")
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+
+    def undefined
+      question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+
+
+
+  #START FUNCTION
+  #--------------------------------------------------------------------------------------------------------
+  #--------------------------------------------------------------------------------------------------------
+  #--------------------------------------------------------------------------------------------------------
 
   class UserName < Base
     def should_start?

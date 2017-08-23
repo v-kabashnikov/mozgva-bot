@@ -3,7 +3,7 @@ include BotCommand
 
 class BotMessageDispatcher
   attr_reader :message, :user
-  COMMANDS = {game_registration: 'GameRegistration', help: 'Help', start: 'Start', schedule: "Schedule", new_team: "NewTeam", change_username: 'UserName', cancel: 'Cancel'}
+  COMMANDS = {game_registration: 'GameRegistration', help: 'Help', start: 'Start', schedule: "Schedule", new_team: "NewTeam", change_username: 'UserName', cancel: 'Cancel', settings: 'PersonalSettings'}
 
   def initialize(message, user)
     @message = message
@@ -12,7 +12,7 @@ class BotMessageDispatcher
 
    def process
     command = message.dig(:message, :text)
-    if ["/cancel", "Отменить"].include?(command) 
+    if ["/cancel", "Отменить"].include?(command)
       new_command = eval("BotCommand::Cancel.new(user, message)")
       new_command.start
     else
