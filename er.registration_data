@@ -1,0 +1,33 @@
+
+[1mFrom:[0m /home/kabashnikov/Desktop/workflow/mozgva-bot/lib/bot_command.rb @ line 135 BotCommand::TeamChecker#start:
+
+    [1;34m130[0m: [32mdef[0m [1;34mstart[0m
+    [1;34m131[0m:   rd = [1;34;4mRegistrationData[0m.new([35mstatus[0m: [31m[1;31m"[0m[31mfrom matching existing team[1;31m"[0m[31m[0m, [35mteam_name[0m: text)
+    [1;34m132[0m:   user.registration_data.destroy [32mif[0m user.registration_data.present?
+    [1;34m133[0m:   user.registration_data = rd
+    [1;34m134[0m:   user.registration_data.save
+ => [1;34m135[0m:   binding.pry
+    [1;34m136[0m:   [32mif[0m team_exists?(text)
+    [1;34m137[0m:     url = [1;34;4mURI[0m.parse([31m[1;31m"[0m[31mhttps://mozgva-staging.herokuapp.com/api/v1/games/schedule?id=11[1;31m"[0m[31m[0m)
+    [1;34m138[0m:     schedule = [1;34;4mJSON[0m.parse([1;34;4mNet[0m::[1;34;4mHTTP[0m.get(url))
+    [1;34m139[0m:     msg = []
+    [1;34m140[0m:     schedule.each [32mdo[0m |key, value|
+    [1;34m141[0m:       value.each [32mdo[0m |time|
+    [1;34m142[0m:         msg << key
+    [1;34m143[0m:       [32mend[0m
+    [1;34m144[0m:     [32mend[0m
+    [1;34m145[0m:     msg << [31m[1;31m"[0m[31mОтменить[1;31m"[0m[31m[0m
+    [1;34m146[0m:     question = [31m[1;31m"[0m[31mНа какую дату вы хотите зарегистрироваться?[1;31m"[0m[31m[0m
+    [1;34m147[0m:     send_keyboard(msg, question)
+    [1;34m148[0m:     user.set_next_bot_command([31m[1;31m'[0m[31mBotCommand::NewTeamDate[1;31m'[0m[31m[0m)
+    [1;34m149[0m:   [32melse[0m
+    [1;34m150[0m:     question = [31m[1;31m"[0m[31mТакой команды не существует. Может быть вы написали название с ошибкой?[1;31m"[0m[31m[0m
+    [1;34m151[0m:     keys = [[31m[1;31m"[0m[31mНаписать название еще раз[1;31m"[0m[31m[0m, [31m[1;31m"[0m[31mЗарегистрироваться как новая команда[1;31m"[0m[31m[0m, [31m[1;31m"[0m[31mОтменить[1;31m"[0m[31m[0m]
+    [1;34m152[0m:     send_keyboard(keys, question)
+    [1;34m153[0m:     user.set_next_bot_command([31m[1;31m'[0m[31mBotCommand::NewFromExisting[1;31m'[0m[31m[0m)
+    [1;34m154[0m:   [32mend[0m
+    [1;34m155[0m: 
+    [1;34m156[0m:   [1;34m# send_message("Как называется Ваша команда? Напишите, пожалуйста, название в точь точь как на сайте mozgva.com")[0m
+    [1;34m157[0m:   [1;34m# user.set_next_bot_command('BotCommand::NewTeamDate')[0m
+    [1;34m158[0m: [32mend[0m
+
