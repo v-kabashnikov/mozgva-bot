@@ -10,7 +10,7 @@ module BotCommand
       @message = message
       token = ENV['token']
       @api = ::Telegram::Bot::Api.new(token)
-      @greeting = "Привет, меня зовут Мозгва_бот.\nЯ могу показать тебе актуальное расписание на ближайшие игры.\nИли даже зарегистрировать твою команду.\nВот что я умею:\n/game_registration - Регистриция на игру \n/schedule - Расписание игр\n/change_username - Изменить имя (имя используется в качестве имени капитана команды при регистрации)"
+      @greeting = "Привет, меня зовут Мозгва_бот.\nЯ могу показать тебе актуальное расписание на ближайшие игры.\nИли даже зарегистрировать твою команду.\nВот что я умею:\n/game_registration - Регистриция на игру \n/schedule - Расписание игр\n/settings - Персональные настройки (Имя, название команды, секретный код, номер телефона. Используются при регистрации)"
     end
 
     def should_start?
@@ -35,6 +35,13 @@ module BotCommand
       @api.call('sendMessage', chat_id: @user.telegram_id, text: question, reply_markup: answers)
     end
 
+    def send_button(text, question, options={})
+      button =
+        Telegram::Bot::Types::KeyboardButton
+        .new(text: text)
+      @api.call('sendMessage', chat_id: @user.telegram_id, text: question, reply_markup: button)
+    end
+
     def remove_keyboard(text)
       kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
       @api.call('sendMessage', chat_id: @user.telegram_id, text: text, reply_markup: kb)
@@ -50,9 +57,9 @@ module BotCommand
   end
 
   #HELP FUNCTION
-  #-------------
-  #-------------
-  #-------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
 
   class Help < Base
     def should_start?
@@ -65,10 +72,10 @@ module BotCommand
     end
   end
 
-  #SCHEDULE FUNCTION
-  #-------------
-  #-------------
-  #-------------
+  #SCHEDULE-----------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
 
 
   class Schedule < Base
@@ -92,10 +99,212 @@ module BotCommand
     end
   end
 
-  #REGISTRATION FUNCTION
-  #-------------
-  #-------------
-  #-------------
+  #EXISTING TEAM REGISTRATION-----------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  
+  class ExistingTeam < Base
+
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      keys = []
+      keys << user.team_name if user.team_name.present?
+      keys << "Отменить"
+      send_keyboard(keys, "Как называется Ваша команда? Напишите, пожалуйста, название в точь точь как на сайте mozgva.com или выберите название из Вашего профиля(можно добавить в /settings")
+      user.set_next_bot_command('BotCommand::TeamChecker')
+    end
+
+    def undefined
+      send_message("existing_team")
+    end
+
+  end
+
+  class TeamChecker < Base
+
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      user.update_attribute(:team_name, text)
+      rd = RegistrationData.new(status: "from matching existing team", team_name: text)
+      user.registration_data.destroy if user.registration_data.present?
+      user.registration_data = rd
+      user.registration_data.save
+      if team_exists?(text)
+        url = URI.parse("https://mozgva-staging.herokuapp.com/api/v1/games/schedule?id=11")
+        schedule = JSON.parse(Net::HTTP.get(url))
+        msg = []
+        schedule.each do |key, value|
+          value.each do |time|
+            msg << key
+          end
+        end
+        msg << "Отменить"
+        question = "На какую дату вы хотите зарегистрироваться?"
+        send_keyboard(msg, question)
+        user.set_next_bot_command('BotCommand::NewTeamDate')
+      else
+        question = "Такой команды не существует. Может быть вы написали название с ошибкой?"
+        keys = ["Написать название еще раз", "Зарегистрироваться как новая команда", "Отменить"]
+        send_keyboard(keys, question)
+        user.set_next_bot_command('BotCommand::NewFromExisting')
+      end
+
+      # send_message("Как называется Ваша команда? Напишите, пожалуйста, название в точь точь как на сайте mozgva.com")
+      # user.set_next_bot_command('BotCommand::NewTeamDate')
+    end
+
+    def team_exists?(team_name)
+      name = URI.encode(team_name)
+      response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/find?name=#{name}']
+      begin
+        JSON.parse(response)["success"]  
+      rescue Exception
+        false
+      end
+    end
+
+    def undefined
+      send_message("TeamChecker")
+    end
+  
+  end
+
+
+  class NewFromExisting < Base
+
+    def should_start?
+      ["Написать название еще раз", "Зарегистрироваться как новая команда"].include?(text)
+    end
+
+    def start
+      if text == "Написать название еще раз"
+        send_keyboard("Отменить", "Как называется Ваша команда? Напишите, пожалуйста, название в точь точь как на сайте mozgva.com")
+        user.set_next_bot_command('BotCommand::TeamChecker')
+      elsif text == "Зарегистрироваться как новая команда"
+        url = URI.parse("https://mozgva-staging.herokuapp.com/api/v1/games/schedule?id=11")
+        schedule = JSON.parse(Net::HTTP.get(url))
+        msg = []
+        schedule.each do |key, value|
+          value.each do |time|
+            msg << key
+          end
+        end
+        msg << "Отменить"
+        question = "На какую дату вы хотите зарегистрироваться?"
+        send_keyboard(msg, question)
+        user.set_next_bot_command('BotCommand::NewTeamDate')
+          
+      end
+    end
+
+    def undefined
+      send_message("Пожалуйста, выберите из списка снизу")
+    end
+  
+  end
+
+  class SecretSender < Base
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      if text == "Выслать мне секретный код"
+        team_name = URI.encode(user.registration_data.team_name)
+        response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/find?name=#{team_name}']
+        begin
+          id = JSON.parse(response)["team"]["id"]  
+        rescue Exception
+          false
+        end
+        response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/#{id}/send_secret']
+        begin
+          result = JSON.parse(response)
+        rescue Exception
+          false
+        end
+        status = result["status"]
+        message = result["message"]
+        if status
+          send_keyboard("Отменить", "Код успешно выслан, введите его")
+          user.set_next_bot_command('BotCommand::SecretSender')
+        else
+          send_keyboard(["Выслать мне секретный код", "Отменить"], "Что-то пошло не так:\n#{message}\nВведите код еще раз или отмените")
+          user.set_next_bot_command('BotCommand::SecretSender')
+        end
+        
+
+      else
+        if text == "Ввести новый секретный код"
+          send_keyboard("Отменить", "Введите код")
+          user.set_next_bot_command('BotCommand::SecretSender')
+        else
+          if text == "Да"
+            user.registration_data.update_attribute(:secret, user.secret)  
+          else
+            user.update_attribute(:secret, text)
+            user.registration_data.update_attribute(:secret, text)
+          end
+          
+          response = register_team(user.registration_data)
+          status = response["success"] if response.present?
+          mess = response["message"] if response.present?
+          if status
+            message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s)}\nЧто бы продолжить нажмите /help"
+            remove_keyboard(message)
+            user.reset_next_bot_command
+            user.registration_data.destroy if user.registration_data.present? 
+          else
+            if mess == "Вы уже записались на эту игру"
+              remove_keyboard("Вы уже записались на эту игру\nЧто бы продолжить нажмите /help")
+              user.reset_next_bot_command
+            else
+              send_keyboard(["Выслать мне секретный код", "Отменить"], "Неправильный код, введите еще раз")
+              user.set_next_bot_command('BotCommand::SecretSender')
+            end          
+          end
+        end
+      end
+      
+    end
+
+    def undefined
+      send_message("SecretChecker")
+    end
+
+
+    def register_team(registration_data)
+      endpoint_url = "https://mozgva-staging.herokuapp.com/api/v1/games/booking"
+      api_key = "test_bot_api_key"
+      date = registration_data.date
+      id = 11
+      time = registration_data.games.first.time
+      phone = registration_data.phone
+      captain_name = user.nickname || user.last_name || user.first_name
+      persons = registration_data.member_amount
+      team_name = URI.encode(registration_data.team_name)
+      secret = registration_data.secret
+      response = %x[curl -X POST --header 'Content-Type: application/x-www-form-urlencoded' --header 'Accept: application/json' -d 'id=#{id}&date=#{date}&time=#{time}&phone=#{phone}&name=#{captain_name}&persons=#{persons}&api_key=#{api_key}&team_name=#{team_name}&secret=#{secret}' '#{endpoint_url}']
+
+      JSON.parse(response)
+    end
+  end
+
+
+  
+
+
+  #NEW TEAM REGISTRATION----------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
 
   class GameRegistration < Base
     def should_start?
@@ -110,11 +319,6 @@ module BotCommand
     def undefined
     end
   end
-
-  #NEW TEAM FUNCTION
-  #-------------
-  #-------------
-  #-------------
 
   class NewTeam < Base
     def should_start?
@@ -148,17 +352,29 @@ module BotCommand
       schedule = JSON.parse(Net::HTTP.get(url))
       msg = []
       if schedule[text]
-        rd = RegistrationData.new(status: "in progress", date: date)
-        user.registration_data.destroy if user.registration_data.present?
-        user.registration_data = rd
-        user.registration_data.save
+        if user.registration_data.present?
+          if user.registration_data.status == "from matching existing team"
+            user.registration_data.date = date
+            user.registration_data.save
+          else
+             user.registration_data.destroy
+             rd = RegistrationData.new(status: "in progress", date: date)
+             user.registration_data = rd
+             user.registration_data.save
+          end
+        else
+          rd = RegistrationData.new(status: "in progress", date: date)
+          user.registration_data = rd
+          user.registration_data.save
+        end
+        
         #save date to the game
         #user.current_registration.set_date
         #it sets date
         #it creates user.current_registrations.times << 1), 2) ...
 
         schedule[text].keys.each_with_index do |time, index|
-          rd.games.create(selector: index+1, time: time)
+          user.registration_data.games.create(selector: index+1, time: time)
           msg << time
         end
         msg << "Отменить"
@@ -168,8 +384,6 @@ module BotCommand
       else
         send_message("Выберите дату из списка")
       end
-
-
     end
 
     def undefined
@@ -187,9 +401,20 @@ module BotCommand
       user.registration_data.games.each do |game|
         game.destroy if game.time != text
       end
-      question = "Как будет называться Ваша команда?"
-      send_keyboard("Отменить", question)
-      user.set_next_bot_command('BotCommand::NewTeamName')
+      if user.team_name.present?
+        user.registration_data.update_attribute(:team_name, user.team_name)
+        question = "Пожалуйста, подтвердите название вашей команды, вы называетесь #{user.team_name}?"
+        send_keyboard(["Да", "Изменить название", "Отменить"], question)
+        user.set_next_bot_command('BotCommand::AreYouSure')
+      elsif user.registration_data.team_name.present?
+        question = "Пожалуйста, подтвердите название вашей команды, вы называетесь #{user.registration_data.team_name}?"
+        send_keyboard(["Да", "Изменить название", "Отменить"], question)
+        user.set_next_bot_command('BotCommand::AreYouSure')
+      else
+        question = "Как будет называться Ваша команда?"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::NewTeamName')
+      end   
     end
 
     def undefined
@@ -205,11 +430,14 @@ module BotCommand
 
     def start
       if team_exists? text
+        user.update_attribute(:team_name, text)
+        user.registration_data.update_attribute(:team_name, text)
         question = "Такая команда уже существует"
         send_keyboard(["Изменить название", "Перейти к регистрации существующей команды", "Отменить"], question)
         user.set_next_bot_command('BotCommand::AreYouSure')
       else
-        user.registration_data.update_attribute(:team_name, text)
+        user.update_attribute(:team_name, text)
+        user.registration_data.update_attribute(:team_name, text) if user.registration_data.status != "from matching existing team"        
         question = "Пожалуйста, подтвердите название вашей команды, вы называетесь #{user.registration_data.team_name}?"
         send_keyboard(["Да", "Изменить название", "Отменить"], question)
         user.set_next_bot_command('BotCommand::AreYouSure')
@@ -222,11 +450,15 @@ module BotCommand
     end
 
     def team_exists?(team_name)
-      response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/find?name=#{team_name}']
-      JSON.parse(response)["success"]
+      name = URI.encode(team_name)
+      response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/find?name=#{name}']
+      begin
+        JSON.parse(response)["success"]  
+      rescue Exception
+        false
+      end
     end
   end
-
 
   class AreYouSure < Base
     def should_start?
@@ -235,25 +467,44 @@ module BotCommand
 
     def start
       if text == "Изменить название"
+        user.registration_data.update_attribute(:status, "in progress")
         question = "Как будет называться Ваша команда?"
         send_keyboard("Отменить", question)
         user.set_next_bot_command('BotCommand::NewTeamName')
       elsif text == "Да"
+        if team_exists?(user.team_name)
+          question = "Такая команда уже существует"
+          send_keyboard(["Изменить название", "Перейти к регистрации существующей команды", "Отменить"], question)
+          user.set_next_bot_command('BotCommand::AreYouSure')
+        else
+          question = "Сколько человек в команде? Максимум 9 чел."
+          keys = %w(1 2 3 4 5 6 7 8 9 Отменить)
+          send_keyboard(keys, question)
+          user.set_next_bot_command('BotCommand::TeamMembers')
+        end
+      elsif text == "Перейти к регистрации существующей команды"
+        user.registration_data.update_attribute(:status, "from matching existing team")
         question = "Сколько человек в команде? Максимум 9 чел."
         keys = %w(1 2 3 4 5 6 7 8 9 Отменить)
         send_keyboard(keys, question)
         user.set_next_bot_command('BotCommand::TeamMembers')
-      elsif text == "Перейти к регистрации существующей команды"
-        remove_keyboard("Уже почти")
-        user.reset_next_bot_command
       end
     end
 
     def undefined
       send_message("????")
     end
-  end
 
+    def team_exists?(team_name)
+      name = URI.encode(team_name)
+      response = %x[curl -X GET --header 'Accept: application/json' 'https://mozgva-staging.herokuapp.com/api/v1/teams/find?name=#{name}']
+      begin
+        JSON.parse(response)["success"]  
+      rescue Exception
+        false
+      end
+    end
+  end
 
   class TeamMembers < Base
     def should_start?
@@ -262,10 +513,14 @@ module BotCommand
 
     def start
       user.registration_data.update_attribute(:member_amount, text.to_i)
-
       user.set_next_bot_command('BotCommand::TeamPhone')
-      question = "Введите номер капитана в формате 79xxxxxxxxx (11 цифр)"
-      send_keyboard("Отменить", question)
+      if user.phone_number.present?
+        question = "Ваш номер телефона #{user.phone_number}"
+        send_keyboard(%w(Да Нет Отменить), question)
+      else
+        question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)\nТакже вы можете указать номер в настройках /settings, чтобы не вводить его каждый раз при регистрации."
+        send_keyboard("Отменить", question)
+      end
 
     end
 
@@ -275,74 +530,102 @@ module BotCommand
     end
   end
 
-
-
-
   class TeamPhone < Base
     def should_start?
-      text =~ /^[7][9]\d{9}/
+      text =~ /^[7]\d{8,}/ || %w(Да Нет).include?(text)
     end
 
     def start
-      user.registration_data.update_attribute(:phone, text.to_i)
+      case text
+      when /^[7]\d{8,}/, "Да"
+        if text == "Да"
+          user.registration_data.update_attribute(:phone, user.phone_number.to_i)
+        else
+          user.update_attribute(:phone_number, text.to_i)
+          user.registration_data.update_attribute(:phone, text.to_i)
+        end
 
-      response = register_team(user.registration_data)
-      status = response["success"]
-      message = response["message"]
+        
+        if user.registration_data.status == "from matching existing team"
+          if user.secret.present?
+            question = "Всегда приятно пообщаться с опытным Мозгвичем. Но мне надо удостовериться что вы действительно участник команды. Назовите секретный код Вашей команды. (У каждой команды на Мозгве есть свой ключ. Это слово (его придумывает капитан) дает право другим игрокам управлять аккаунтом команды. Если вы не знаете Ваш секретный код, спросите его у капитана. Если вы и есть капитан, придумайте секретный код и укажите его на сайте, в личном кабинете, в разделе 'секретный код'.\nИспользовать секретный код #{user.secret}?"
+            send_keyboard(["Да", "Ввести новый секретный код", "Отменить"], question)
+            user.set_next_bot_command('BotCommand::SecretSender')
+          else
+            question = "Всегда приятно пообщаться с опытным Мозгвичем. Но мне надо удостовериться что вы действительно участник команды. Назовите секретный код Вашей команды. (У каждой команды на Мозгве есть свой ключ. Это слово (его придумывает капитан) дает право другим игрокам управлять аккаунтом команды. Если вы не знаете Ваш секретный код, спросите его у капитана. Если вы и есть капитан, придумайте секретный код и укажите его на сайте, в личном кабинете, в разделе 'секретный код'."
+            send_keyboard(["Выслать мне секретный код", "Отменить"], question)
+            user.set_next_bot_command('BotCommand::SecretSender')
+          end
       
-      if status
-        message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || user.last_name}"
-        remove_keyboard(message)
-        user.reset_next_bot_command
-      else
-        remove_keyboard(message)
-        user.reset_next_bot_command
+        else
+
+          response = register_team(user.registration_data)
+          status = response["success"]
+          message = response["message"]
+            
+          if status
+            message = "Команда #{user.registration_data.team_name} в составе #{user.registration_data.member_amount} чел. зарегистрирована на игру #{user.registration_data.date}, в #{user.registration_data.games.first.time}. Телефон капитана: #{user.registration_data.phone}\nИмя капитана: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s)}\nЧто бы продолжить нажмите /help"
+            remove_keyboard(message)
+            user.reset_next_bot_command
+          else
+            remove_keyboard(message.to_s + "\nЧто бы продолжить нажмите /help")
+            user.reset_next_bot_command
+          end
+        end      
+
+      when "Нет"
+        question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)\nТакже вы можете указать номер в настройках /settings, чтобы не вводить его каждый раз при регистрации."
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::ChangePhoneFromRegistration')
       end
 
     end
 
+
     def undefined
-      question = "Введите номер телефона в формате 79xxxxxxxxx (11 цифр)"
+      question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
       send_keyboard("Отменить", question)
     end
 
 
     def register_team(registration_data)
-
       endpoint_url = "https://mozgva-staging.herokuapp.com/api/v1/games/booking"
       api_key = "test_bot_api_key"
-      date = user.registration_data.date
+      date = registration_data.date
       id = 11
-      time = user.registration_data.games.first.time
-      phone = user.registration_data.phone
+      time = registration_data.games.first.time
+      phone = registration_data.phone
       captain_name = user.nickname || user.last_name || user.first_name
-      persons = user.registration_data.member_amount
-      team_name = user.registration_data.team_name
-
-
+      persons = registration_data.member_amount
+      team_name = URI.encode(registration_data.team_name)
       response = %x[curl -X POST --header 'Content-Type: application/x-www-form-urlencoded' --header 'Accept: application/json' -d 'id=#{id}&date=#{date}&time=#{time}&phone=#{phone}&name=#{captain_name}&persons=#{persons}&api_key=#{api_key}&team_name=#{team_name}' '#{endpoint_url}']
 
       JSON.parse(response)
     end
   end
 
-
-
-  class Next < Base
+  class ChangePhoneFromRegistration < Base
     def should_start?
-      text =~ /\A\/next/
+      text =~ /^[7]\d{8,}/
     end
 
     def start
-      send_message("Next step")
-      user.reset_next_bot_command
+      user.update_attribute(:phone_number, text)
+      user.set_next_bot_command('BotCommand::TeamPhone')
+      question = "Ваш номер телефона #{user.phone_number}"
+      send_keyboard(%w(Да Нет Отменить), question)
+    end
+
+    def undefined
+      question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
+      send_keyboard("Отменить", question)
     end
   end
 
-  #START FUNCTION
-  #-------------
-  #-------------
-  #-------------
+  #START----------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
 
   class Start < Base
     def should_start?
@@ -359,23 +642,198 @@ module BotCommand
   end
 
 
+  #PERSONAL SETTINGS
+  #---------------------------------------------------------------------------------------------
+  #----------------------------------------------------------------------------------------------
+  #--------------------------------------------------------------------------------------------------------
+
+
+  class PersonalSettings < Base
+    def should_start?
+      text =~ /\A\/settings/
+    end
+
+    def start
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+  end
+
+  class SettingsRouter < Base
+    def should_start?
+      %w(Имя Секретный\ код Название\ команды Телефон).include?(text)
+    end
+
+    def start
+      case text
+      when "Имя"
+        question = "Текущее имя: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s) }\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangeName')
+      when "Секретный код"
+        question = "Текущий секретный код: #{user.secret}\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangeSecret')
+      when "Название команды"
+        question = "Текущее название команды: #{user.team_name}\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangeTeamName')
+      when "Телефон"
+        question = "Текущий номер: #{user.phone_number}\nХочешь изменить его?"
+        send_keyboard(%w(Да Нет Отменить), question)
+        user.set_next_bot_command('BotCommand::ChangePhone')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только\nИмя, Секретный код, Название команды, Телефон"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+  class ChangeSecret < Base
+    def should_start?
+      %w(Да Нет).include?(text)
+    end
+
+    def start
+      case text
+      when "Да"
+        question = "Введи код"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::AddSecret')
+      when "Нет"
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только Да или Нет"
+      send_keyboard(%w(Да Нет Отменить), question)
+    end
+  end
+
+  class AddSecret < Base
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      user.update_attribute(:secret, text)
+      remove_keyboard("Секретный код записан: #{user.secret}, #{user.nickname}\n")
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+  end
+
+  class ChangeTeamName < Base
+    def should_start?
+      %w(Да Нет).include?(text)
+    end
+
+    def start
+      case text
+      when "Да"
+        question = "Введите название команды"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::AddTeamName')
+      when "Нет"
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только Да или Нет"
+      send_keyboard(%w(Да Нет Отменить), question)
+    end
+  end
+
+  class AddTeamName < Base
+    def should_start?
+      text =~ /.+/
+    end
+
+    def start
+      user.update_attribute(:team_name, text)
+      remove_keyboard("Название команды записано: #{user.team_name}, #{user.nickname}")
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+  end
+
+  class ChangePhone < Base
+    def should_start?
+      %w(Да Нет).include?(text)
+    end
+
+    def start
+      case text
+      when "Да"
+        question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
+        send_keyboard("Отменить", question)
+        user.set_next_bot_command('BotCommand::AddPhone')
+      when "Нет"
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
+      end
+    end
+
+    def undefined
+      question = "Я понимаю только Да или Нет"
+      send_keyboard(%w(Да Нет Отменить), question)
+    end
+  end
+
+  class AddPhone < Base
+    def should_start?
+      text =~ /^[7]\d{8,}/
+    end
+
+    def start
+      user.update_attribute(:phone_number, text)
+      remove_keyboard("Телефон записан: #{user.phone_number}, #{user.nickname}\n")
+      question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+      send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+      user.set_next_bot_command('BotCommand::SettingsRouter')
+    end
+
+    def undefined
+      question = "Введите номер телефона в формате 7 xxx xxx xx xx (минимум 9 цифр)"
+      send_keyboard("Отменить", question)
+    end
+  end
+
+
+
+
+  #START FUNCTION
+  #--------------------------------------------------------------------------------------------------------
+  #--------------------------------------------------------------------------------------------------------
+  #--------------------------------------------------------------------------------------------
+
   class UserName < Base
     def should_start?
       text =~ /\A\/change_username/
     end
 
     def start
-      question = "Текущее имя: #{user.nickname || (user.first_name.to_s +" "+ user.last_name.to_s) }\nХочешь изменить его?"
+      question = "Текущее имя: #{user.nickname || (user.first_name.to_s + " " + user.last_name.to_s) }\nХочешь изменить его?"
       send_keyboard(%w(Да Нет Отменить), question)
       user.set_next_bot_command('BotCommand::ChangeName')
     end
   end
 
-
-
   class ChangeName < Base
     def should_start?
-      text == "Да" || "Нет"
+       %w(Да Нет).include?(text)
     end
 
     def start
@@ -384,25 +842,26 @@ module BotCommand
         send_keyboard("Отменить", question)
         user.set_next_bot_command('BotCommand::Nickname')
       else
-        user.reset_next_bot_command
+        question = "Персональные настройки. Выберите что вы хотите просмотреть/изменить"
+        send_keyboard(%w(Имя Секретный\ код Название\ команды Телефон Отменить), question)
+        user.set_next_bot_command('BotCommand::SettingsRouter')
       end
     end
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
-
   class Introduce < Base
     def should_start?
-      text == "Да" || "Нет"
+      %w(Да Нет).include?(text)
     end
 
     def start
       if text == "Да"
-        send_message("Приятно познакомиться!")
+        remove_keyboard("Приятно познакомиться!\nЧто бы продолжить нажмите /help")
         user.reset_next_bot_command
       else
         question = "Как тебя зовут?"
@@ -413,7 +872,7 @@ module BotCommand
 
     def undefined
       question = "Я понимаю только Да или Нет"
-      send_keyboard("Отменить", question)
+      send_keyboard(%w(Да Нет Отменить), question)
     end
   end
 
@@ -424,10 +883,15 @@ module BotCommand
 
     def start
       user.update_attribute(:nickname, text)
-      remove_keyboard("Спасибо, #{user.nickname}")      
+      remove_keyboard("Спасибо, #{user.nickname}\nЧто бы продолжить нажмите /help")
       user.reset_next_bot_command
     end
   end
+
+  #CANCEL----------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
 
   class Cancel < Base
     def should_start?
@@ -435,17 +899,15 @@ module BotCommand
     end
 
     def start
-      send_message("Отменено")      
+      remove_keyboard("Отменено\nЧто бы продолжить нажмите /help")
       user.reset_next_bot_command
     end
   end
 
-
-
-  #UNDEFINED FUNCTION
-  #-------------
-  #-------------
-  #-------------
+  #UNDEFINED----------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
+  #-------------------------------------------------------------------------------------------
 
   class Undefined < Base
     def start
