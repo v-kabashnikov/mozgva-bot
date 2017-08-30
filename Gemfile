@@ -10,6 +10,7 @@ gem 'pry'
 gem 'telegram-bot-ruby'
 gem "figaro"
 gem 'rest-client', '~> 1.8'
+gem 'rails-i18n', '~> 5.0.0'
 
 # Use Capistrano for deployment
 # gem 'capistrano-rails', group: :development

@@ -11,8 +11,16 @@ class BotMessageDispatcher
     @user = user
   end
 
-   def process
+  def process
+    binding.pry
     command = message.dig(:message, :text)
+    action = BotActionRouter.fetch_action_object(command)
+
+
+
+
+
+
     if ["/cancel", "Отменить"].include?(command)
       new_command = eval("BotCommand::Cancel.new(user, message)")
       new_command.start

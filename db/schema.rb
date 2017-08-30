@@ -38,7 +38,7 @@ ActiveRecord::Schema.define(version: 20170823115400) do
     t.index ["user_id"], name: "index_registration_data_on_user_id"
   end
 
-  create_table "users", id: :serial, force: :cascade do |t|
+  create_table "users", force: :cascade do |t|
     t.string "telegram_id"
     t.string "first_name"
     t.string "last_name"
