@@ -1,57 +1,17 @@
-require 'telegram/bot'
-include BotCommand
-
 class BotMessageDispatcher
-  attr_reader :message, :user
+  attr_accessor :command
 
-  COMMANDS = {game_registration: 'GameRegistration', help: 'Help', start: 'Start', schedule: "Schedule", new_team: "NewTeam", change_username: 'UserName', cancel: 'Cancel', existing_team: "ExistingTeam", settings: 'PersonalSettings'}
-
-  def initialize(message, user)
-    @message = message
-    @user = user
+  def initialize(message)
+    @command = message.dig(:message, :text)
+    @command = remove_slash if begins_from_slash?
   end
 
-  def process
-    binding.pry
-    command = message.dig(:message, :text)
-    action = BotActionRouter.fetch_action_object(command)
-
-
-
-
-
-
-    if ["/cancel", "Отменить"].include?(command)
-      new_command = eval("BotCommand::Cancel.new(user, message)")
-      new_command.start
-    else
-      if user.get_next_bot_command
-        bot_command = user.get_next_bot_command.safe_constantize.new(user, message)
-
-        if bot_command.should_start?
-          bot_command.start
-        else
-          bot_command.undefined
-        end
-      else
-          if command
-            command = message[:message][:text][1..-1]
-            if COMMANDS.key?(command.to_sym)
-              new_command = eval("BotCommand::#{COMMANDS[command.to_sym]}.new(user, message)")
-              new_command.start
-            else
-              unknown_command
-            end
-          else
-            unknown_command
-          end
-      end
-    end
+  def begins_from_slash?
+    @command.first == "/"
   end
 
-  private
-
-  def unknown_command
-    BotCommand::Undefined.new(user, message).start
+  def remove_slash
+    @command[1..-1]
   end
+
 end

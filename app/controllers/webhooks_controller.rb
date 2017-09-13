@@ -1,9 +1,17 @@
 class WebhooksController < ApplicationController
+  require 'bot_action_router'
   require 'bot_message_dispatcher'
   skip_before_action :verify_authenticity_token
 
   def callback
-    dispatcher.new(webhook, user).process
+    command = BotMessageDispatcher.new(webhook).command
+    action_object = BotActionRouter.new(user, command).fetch_action_object
+    bot_command = action_object.new(user, webhook)
+    if bot_command.should_start?
+      bot_command.start
+    else
+      bot_command.undefined
+    end
     render body: nil
   end
 
@@ -11,15 +19,13 @@ class WebhooksController < ApplicationController
     params['webhook']
   end
 
-  def dispatcher
-    ::BotMessageDispatcher
-  end
+
 
   def from
     begin
       webhook.dig(:message, :from) || webhook.dig(:edited_message, :from)
     rescue Exception
-      
+
     end
   end
 
